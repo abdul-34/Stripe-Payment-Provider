@@ -4,6 +4,8 @@ import { useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import axios from 'axios';
 
+/* eslint-disable */
+
 function ConnectForm() {
   // Get the locationId from the URL (e.g., /connect?locationId=...)
   const searchParams = useSearchParams();

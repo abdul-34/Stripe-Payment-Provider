@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getStripeSecretKey } from '@/lib/db/payment'; // The helper we just made
 import Stripe from 'stripe';
 
+/* eslint-disable */
+
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();

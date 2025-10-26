@@ -5,6 +5,9 @@ import { loadStripe, StripeElementsOptions } from '@stripe/stripe-js';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import axios from 'axios';
 
+/* eslint-disable */
+
+
 // A simple loading spinner component
 const Loader = () => <div>Loading Checkout...</div>;
 

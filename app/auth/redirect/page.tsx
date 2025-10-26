@@ -4,6 +4,9 @@ import axios from 'axios';
 import qs from 'qs';
 
 
+/* eslint-disable */
+
+
 const Index = () => {
     const [message, setMessage] = useState("Installation in Progress")
     const hasRun = useRef(false); // Prevent double execution

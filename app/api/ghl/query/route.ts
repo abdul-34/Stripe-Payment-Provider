@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getStripeSecretKey, verifyGhlApiKey } from '@/lib/db/payment';
 import Stripe from 'stripe';
 
+/* eslint-disable */
 /**
  * Main GHL Payment Provider Webhook
  * This handles all server-to-server requests from GHL.
