@@ -1,0 +1,44 @@
+// prisma/schema.prisma
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Token {
+  id           String   @id @default(cuid())
+  appId        String?
+  accessToken  String   @db.Text
+  refreshToken String?  @db.Text
+  userType     String?
+  companyId    String?
+  locationId   String   @unique // This is your primary link
+  userId       String?
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// This holds the Stripe keys and our verification keys
+model PaymentConfig {
+  id                  String   @id @default(cuid())
+  locationId          String   @unique // Links to the Token/Location
+  
+  // Encrypted Stripe secret keys
+  testSecKey          String   @db.Text
+  liveSecKey          String   @db.Text
+  
+  // Public keys (safe to store as-is)
+  testPubKey          String?
+  livePubKey          String?
+
+  // Our internally generated keys to verify GHL's webhooks
+  testVerificationKey String   @unique
+  liveVerificationKey String   @unique
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
