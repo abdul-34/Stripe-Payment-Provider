@@ -511,3 +511,32 @@ export const getAccessToken = async (locationId: string) => {
   return tokenRecord
 
 };
+/**
+ * Fetches a GHL Contact's details using their ID.
+ * We need this to get the contact's email and name.
+ */
+export async function getGhlContact(contactId: string, locationId: string): Promise<any> {
+  // Use our helper to get a valid token
+  const accessToken = await getAccessToken(locationId);
+  if (!accessToken) {
+    throw new Error("Could not retrieve access token for GHL.");
+  }
+
+  const options = {
+    method: 'GET',
+    url: `https://services.leadconnectorhq.com/contacts/${contactId}`,
+    headers: {
+      Authorization: `Bearer ${accessToken?.accessToken}`,
+      Version: '2021-07-28', // Use a stable GHL API version
+      Accept: 'application/json'
+    }
+  };
+
+  try {
+    const response = await axios.request(options);
+    return response.data.contact;
+  } catch (error: any) {
+    console.error("Error fetching GHL contact:", error.response?.data || error.message);
+    throw new Error("Failed to fetch contact details from GHL.");
+  }
+}

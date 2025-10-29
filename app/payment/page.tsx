@@ -9,7 +9,9 @@ import axios from 'axios';
 
 const Loader = () => <div>Loading Checkout...</div>;
 
-const CheckoutForm = () => {
+// --- NEW/UPDATED ---
+// CheckoutForm now takes a 'mode' prop to decide what to do
+const CheckoutForm = ({ mode }: { mode: 'payment' | 'setup' }) => {
     const stripe = useStripe();
     const elements = useElements();
     const [isProcessing, setIsProcessing] = useState(false);
@@ -17,41 +19,55 @@ const CheckoutForm = () => {
     const handleSubmit = async (event: React.FormEvent) => {
         event.preventDefault();
         if (!stripe || !elements) return;
-
         setIsProcessing(true);
 
         try {
-            const { error, paymentIntent } = await stripe.confirmPayment({
-                elements,
-                confirmParams: {},
-                redirect: "if_required",
-            });
-
-            if (error) {
-                console.error("Stripe error:", error.message);
-                window.parent.postMessage({ type: 'custom_element_error_response', error: error.message }, '*');
-                setIsProcessing(false);
-                return;
-            }
-
-            if (paymentIntent?.status === 'succeeded') {
-                // Notify GHL that payment succeeded
-                window.parent.postMessage({
-                    type: 'custom_element_success_response',
-                    chargeId: paymentIntent.id,
-                }, '*');
-
-                // Optionally, notify your backend
-                await axios.post('/api/stripe/payment-success', {
-                    paymentIntentId: paymentIntent.id,
+            if (mode === 'setup') {
+                // --- NEW ---
+                // This is for "Add Payment Method"
+                const { error } = await stripe.confirmSetup({
+                    elements,
+                    redirect: "if_required",
                 });
 
+                if (error) {
+                    console.error("Stripe Setup error:", error.message);
+                    window.parent.postMessage({ type: 'custom_element_error_response', error: { description: error.message } }, '*');
+                    setIsProcessing(false);
+                    return;
+                }
+
+                // On success, just send the success event
+                window.parent.postMessage({ type: 'custom_element_success_response' }, '*');
+
             } else {
-                window.parent.postMessage({ type: 'custom_element_error_response', error: 'Payment not successful.' }, '*');
+                // --- EXISTING LOGIC ---
+                // This is for a one-time payment
+                const { error, paymentIntent } = await stripe.confirmPayment({
+                    elements,
+                    redirect: "if_required",
+                });
+
+                if (error) {
+                    console.error("Stripe Payment error:", error.message);
+                    window.parent.postMessage({ type: 'custom_element_error_response', error: { description: error.message } }, '*');
+                    setIsProcessing(false);
+                    return;
+                }
+
+                if (paymentIntent?.status === 'succeeded') {
+                    // We MUST send the chargeId for verification
+                    window.parent.postMessage({
+                        type: 'custom_element_success_response',
+                        chargeId: paymentIntent.id,
+                    }, '*');
+                } else {
+                    window.parent.postMessage({ type: 'custom_element_error_response', error: { description: 'Payment not successful.' } }, '*');
+                }
             }
 
         } catch (e: any) {
-            window.parent.postMessage({ type: 'custom_element_error_response', error: e.message }, '*');
+            window.parent.postMessage({ type: 'custom_element_error_response', error: { description: e.message } }, '*');
         }
 
         setIsProcessing(false);
@@ -67,27 +83,63 @@ const CheckoutForm = () => {
     );
 };
 
+
 export default function PaymentPage() {
     const [stripePromise, setStripePromise] = useState<any>(null);
-    const [options, setOptions] = useState<StripeElementsOptions | null>(null);
+    const [options, setOptions] = useState<StripeElementsOptions & { mode?: 'payment' | 'setup' } | null>(null);
+    const [isGhlReady, setIsGhlReady] = useState(false);
 
     useEffect(() => {
+        const intervalId = setInterval(() => {
+            if (isGhlReady) {
+                clearInterval(intervalId);
+                return;
+            }
+
+            // --- NEW/UPDATED ---
+            // Send the full ready event as per the new docs
+            window.parent.postMessage({
+                type: 'custom_provider_ready',
+                loaded: true,
+                addCardOnFileSupported: true // We support saving cards!
+            }, '*');
+        }, 200);
+
         const handleGhlMessage = (event: MessageEvent) => {
-            console.log("ghl_payment_event", event)
-            // if (event.origin !== 'https://app.gohighlevel.com') return;
+            console.log("ghl_payment_event", event);
 
-            if (event.data.type === 'payment_initiate_props') {
-                const { publishableKey, amount, currency, contactId, locationId } = event.data;
+            if (typeof event.data !== 'object' || event.data === null || !event.data.type) {
+                return;
+            }
 
+            // --- NEW/UPDATED ---
+            // We now handle TWO types of events
+            if (event.data.type === 'payment_initiate_props' || event.data.type === 'setup_initiate_props') {
+                setIsGhlReady(true);
+                clearInterval(intervalId);
 
-                const test_key = "pk_test_51S9QRw44wSmYR5R4NvDcQ5WjLjSdz1oaco4Ff6e4DD6Q4lXIIOgrRltl1anBBfhjudKmi7Hph6I9tKGOD7o30yeo001RDTQHMx"
+                const {
+                    publishableKey,
+                    amount,
+                    currency,
+                    contact, // Get the contact object
+                    locationId,
+                    mode // This will be 'payment' or 'setup'
+                } = event.data;
 
-                // 1. Load Stripe with agency key
-                const stripeInstance = loadStripe(publishableKey || test_key);
-                setStripePromise(stripeInstance);
+                const contactId = contact?.id;
 
-                // 2. Call your backend to create Payment Intent
+                if (!contactId) {
+                    console.error("No Contact ID provided");
+                    window.parent.postMessage({ type: 'custom_element_error_response', error: { description: 'Contact ID is missing.' } }, '*');
+                    return;
+                }
+
+                setStripePromise(loadStripe(publishableKey));
+
+                // Call our backend to create either a PaymentIntent or a SetupIntent
                 axios.post('/api/stripe/create-intent', {
+                    mode: mode, // 'payment' or 'setup'
                     amount,
                     currency,
                     contactId,
@@ -97,31 +149,31 @@ export default function PaymentPage() {
                         const { clientSecret } = res.data;
                         setOptions({
                             clientSecret,
+                            mode: mode, // Pass the mode to the Elements options
                             appearance: { theme: 'stripe' }
                         });
                     })
                     .catch(err => {
-                        console.error("Failed to create Payment Intent:", err);
-                        window.parent.postMessage({
-                            type: 'custom_element_error_response',
-                            error: 'Failed to initialize payment.'
-                        }, '*');
+                        console.error("Failed to create Intent:", err);
+                        window.parent.postMessage({ type: 'custom_element_error_response', error: { description: 'Failed to initialize payment.' } }, '*');
                     });
             }
         };
 
         window.addEventListener('message', handleGhlMessage);
-        window.parent.postMessage({ type: 'custom_provider_ready' }, '*');
 
-        return () => window.removeEventListener('message', handleGhlMessage);
-    }, []);
+        return () => {
+            window.removeEventListener('message', handleGhlMessage);
+            clearInterval(intervalId);
+        };
+    }, [isGhlReady]);
 
-    // Wait until both stripe and options are ready
     if (!options || !stripePromise) return <Loader />;
 
     return (
         <Elements stripe={stripePromise} options={options}>
-            <CheckoutForm />
+            {/* Pass the mode to our form */}
+            <CheckoutForm mode={options.mode!} />
         </Elements>
     );
 }

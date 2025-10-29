@@ -50,13 +50,15 @@ export async function POST(req: NextRequest) {
 
         // 3. --- Get the GHL Access Token we saved during install ---
         const accessToken = await getAccessToken(locationId);
-        if (!accessToken) {
+        if (!accessToken?.accessToken) {
             return NextResponse.json({ success: false, error: 'Auth token not found.' }, { status: 401 });
         }
 
+        console.log("AccessToken", accessToken)
+
         const headers = {
-            'Authorization': `Bearer ${accessToken}`,
-            'Version': '2021-06-01',
+            'Authorization': `Bearer ${accessToken?.accessToken}`,
+            'Version': '2021-07-28',
             'Content-Type': 'application/json'
         };
 
@@ -72,7 +74,9 @@ export async function POST(req: NextRequest) {
             }
         }
 
-        await axios.post(GHL_CONNECT_API, testConfigPayload, { headers });
+        console.log("test_payload", testConfigPayload)
+
+        await axios.post(`${GHL_CONNECT_API}?locationId=${locationId}`, testConfigPayload, { headers });
         // 6. --- All done! Send success back to the frontend ---
         return NextResponse.json({ success: true, message: 'Configuration saved!' });
 

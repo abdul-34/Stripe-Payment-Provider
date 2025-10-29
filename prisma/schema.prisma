@@ -24,21 +24,28 @@ model Token {
 
 // This holds the Stripe keys and our verification keys
 model PaymentConfig {
-  id                  String   @id @default(cuid())
-  locationId          String   @unique // Links to the Token/Location
-  
+  id         String @id @default(cuid())
+  locationId String @unique // Links to the Token/Location
+
   // Encrypted Stripe secret keys
-  testSecKey          String   @db.Text
-  liveSecKey          String   @db.Text
-  
+  testSecKey String @db.Text
+  liveSecKey String @db.Text
+
   // Public keys (safe to store as-is)
-  testPubKey          String?
-  livePubKey          String?
+  testPubKey String?
+  livePubKey String?
 
   // Our internally generated keys to verify GHL's webhooks
-  testVerificationKey String   @unique
-  liveVerificationKey String   @unique
+  testVerificationKey String @unique
+  liveVerificationKey String @unique
 
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CustomerMapping {
+  id               String @id @default(cuid())
+  locationId       String // Links to the Token/Location
+  ghlContactId     String
+  stripeCustomerId String
 }
