@@ -67,43 +67,48 @@ const CheckoutForm = () => {
 export default function PaymentPage() {
     const [stripePromise, setStripePromise] = useState<any>(null);
     const [options, setOptions] = useState<StripeElementsOptions | null>(null);
-
-    // --- NEW ---
-    // Get the parent origin from your screenshot
-    const ghlParentOrigin = "https://api.highlmpct.com";
+    const [isGhlReady, setIsGhlReady] = useState(false); // State to stop the interval
 
     useEffect(() => {
         // --- 1. Set up the persistent "ready" message ---
         const intervalId = setInterval(() => {
+            // Stop sending once GHL has responded
+            if (isGhlReady) {
+                clearInterval(intervalId);
+                return;
+            }
+
             console.log("Sending 'custom_provider_ready' to parent...");
+            // --- UPDATED: Send to targetOrigin '*' ---
+            // This is more robust and ensures the parent window gets the message
             window.parent.postMessage({
                 type: 'custom_provider_ready',
                 loaded: true,
-                addCardOnFileSupported: true // From the new docs
-            }, ghlParentOrigin); // Be specific about the target
+                addCardOnFileSupported: true
+            }, '*'); // Use wildcard target origin
         }, 300); // Send every 300ms
 
-        // --- 2. Set up the safer message listener ---
+        // --- 2. Set up the message listener ---
         const handleGhlMessage = (event: MessageEvent) => {
 
-            // --- CRITICAL: Filter by origin ---
-            // This will stop all the red errors
-            if (event.origin !== ghlParentOrigin) {
-                return;
-            }
+            // --- UPDATED: REMOVED the event.origin check ---
+            // We will listen for messages from ANY origin, but will
+            // only act on the ones with the correct 'type'.
 
-            console.log("RECEIVED MESSAGE FROM GHL:", event.data);
-
-            // Safety check
+            // Safety check: Is the data an object with a 'type' property?
             if (typeof event.data !== 'object' || event.data === null || !event.data.type) {
-                console.warn("GHL message is not a valid object with a 'type' property.");
+                // This will safely ignore all the red "Unable to parse" errors
+                // and messages from Stripe, etc.
                 return;
             }
+
+            console.log("RECEIVED VALID MESSAGE:", event.data);
 
             // --- 3. Handle the event ---
             if (event.data.type === 'payment_initiate_props' || event.data.type === 'setup_initiate_props') {
 
                 // We got the event! Stop the interval.
+                setIsGhlReady(true);
                 clearInterval(intervalId);
 
                 const {
@@ -117,15 +122,9 @@ export default function PaymentPage() {
 
                 const contactId = contact?.id;
 
-                if (!publishableKey) {
-                    console.error("FATAL: No publishableKey received from GHL.");
-                    window.parent.postMessage({ type: 'custom_element_error_response', error: { description: 'Configuration error: publishableKey is missing.' } }, '*');
-                    return;
-                }
-
-                if (!contactId) {
-                    console.error("FATAL: No contactId received from GHL.");
-                    window.parent.postMessage({ type: 'custom_element_error_response', error: { description: 'Configuration error: contactId is missing.' } }, '*');
+                if (!publishableKey || !contactId) {
+                    console.error("FATAL: Missing publishableKey or contactId from GHL.");
+                    window.parent.postMessage({ type: 'custom_element_error_response', error: { description: 'Configuration error: Key or Contact is missing.' } }, '*');
                     return;
                 }
 
@@ -162,7 +161,7 @@ export default function PaymentPage() {
             window.removeEventListener('message', handleGhlMessage);
             clearInterval(intervalId);
         };
-    }, []); // Run only once
+    }, [isGhlReady]); // Add isGhlReady as a dependency
 
     // Wait until both stripe and options are ready
     if (!options || !stripePromise) return <Loader />;
