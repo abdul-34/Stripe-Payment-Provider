@@ -13,7 +13,7 @@ const Index = () => {
     const app_id = "68fe8d962cd1bd6b1999e7db"
 
 
-    const GHL_PROVIDER_API = 'https://api.gohighlevel.com/payments/custom-provider/provider';
+    const GHL_PROVIDER_API = 'https://services.leadconnectorhq.com/payments/custom-provider/provider';
 
 
     const SaveAppToken = async () => {
@@ -62,12 +62,12 @@ const Index = () => {
         const providerConfig = {
             name: "My Custom Stripe Provider",
             description: "A learning project for GHL Payments",
-            imageUrl: `${process.env.NEXT_PUBLIC_DOMAIN_URL!}/logo.png`, // URL to your app's logo
-            locationId: locationId,
+            imageUrl: `https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQQGluJhW7I1NYU7jF77E-9K9I46_ib_DUNHw&s`, // URL to your app's logo
 
             // Here you tell GHL what your app's API URLs are
             queryUrl: `${process.env.NEXT_PUBLIC_DOMAIN_URL!}/api/ghl/query`,     // Your backend API
-            paymentsUrl: `${process.env.NEXT_PUBLIC_DOMAIN_URL!}/payment`          // Your frontend iFrame
+            paymentsUrl: `${process.env.NEXT_PUBLIC_DOMAIN_URL!}/payment`,
+            supportsSubscriptionSchedule: true          // Your frontend iFrame
         };
 
 
@@ -121,7 +121,7 @@ const Index = () => {
 
     return <div className='flex w-full h-[100vh] justify-center items-center'>
         <h1 className='text-3xl font-bold'>{message}</h1>
-    </div>;
+    </div>
 };
 
 export default Index;
