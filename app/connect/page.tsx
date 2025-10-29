@@ -1,21 +1,30 @@
 "use client";
 
-import { useState, Suspense } from 'react';
+import { useState, Suspense, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import axios from 'axios';
+import SsoHandler from '@/lib/ssoHandler';
+
 
 /* eslint-disable */
 
 function ConnectForm() {
   // Get the locationId from the URL (e.g., /connect?locationId=...)
   const searchParams = useSearchParams();
-  const locationId = searchParams.get('locationId');
 
   // Form state
   const [testPubKey, setTestPubKey] = useState('');
   const [testSecKey, setTestSecKey] = useState('');
   const [livePubKey, setLivePubKey] = useState('');
   const [liveSecKey, setLiveSecKey] = useState('');
+  const { SSO, checkSSO } = SsoHandler();
+
+  const [ssodata, setssodata] = useState<any>({ companyId: 'demo', activeLocation: 'demo' });
+  const [loader, setloader] = useState(false);
+
+
+  console.log("ssoData", ssodata)
+
 
   // UI state
   const [loading, setLoading] = useState(false);
@@ -23,17 +32,17 @@ function ConnectForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!locationId) {
-      setMessage("Error: No Location ID found. Please reinstall the app.");
-      return;
-    }
+    // if (!locationId) {
+    //   setMessage("Error: No Location ID found. Please reinstall the app.");
+    //   return;
+    // }
 
     setLoading(true);
     setMessage("Saving configuration...");
 
     try {
       const response = await axios.post('/api/ghl/connect-keys', {
-        locationId,
+        locationId: ssodata?.activeLocation,
         testPubKey,
         testSecKey,
         livePubKey,
@@ -53,11 +62,30 @@ function ConnectForm() {
     }
   };
 
+
+  const sso = {
+    app_id: "68fe8d962cd1bd6b1999e7db",
+    key: process.env.NEXT_PUBLIC_SSO_KEY!,
+
+  }
+
+
+  useEffect(() => {
+    checkSSO(sso);
+  }, []);
+  useEffect(() => {
+    if (SSO != '' && SSO != undefined) {
+      var data = JSON.parse(SSO);
+      setssodata(data);
+      setloader(false);
+    }
+  }, [SSO]);
+
   return (
     <div style={{ padding: '40px', maxWidth: '600px', margin: 'auto' }}>
       <h1>Configure Your Stripe Provider</h1>
       <p>{message}</p>
-      
+
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
         <h3>Test Mode</h3>
         <input
