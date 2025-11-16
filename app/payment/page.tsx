@@ -7,6 +7,8 @@ import axios from 'axios';
 
 const Loader = () => <div>Loading Checkout...</div>
 
+
+
 const CheckoutForm = () => {
     const stripe = useStripe();
     const elements = useElements();
