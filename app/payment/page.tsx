@@ -5,19 +5,14 @@ import { loadStripe, StripeElementsOptions } from '@stripe/stripe-js';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import axios from 'axios';
 
-/* eslint-disable */
-
 const Loader = () => <div>Loading Checkout...</div>;
 
-// --- NEW/UPDATED ---
-// CheckoutForm now takes a 'mode' prop to decide what to do
-/* eslint-disable */
 const CheckoutForm = () => {
     const stripe = useStripe();
     const elements = useElements();
     const [isProcessing, setIsProcessing] = useState(false);
 
-    const handleSubmit = async (event: React.FormEvent) => {
+    const handleSubmit = async (event: any) => {
         event.preventDefault();
         if (!stripe || !elements) return;
 
@@ -30,86 +25,72 @@ const CheckoutForm = () => {
             });
 
             if (error) {
-                console.error("Stripe error:", error.message);
-                window.parent.postMessage({ type: 'custom_element_error_response', error: { description: error.message } }, '*');
+                window.parent.postMessage({
+                    type: "custom_element_error_response",
+                    error: { description: error.message }
+                }, "*");
+
                 setIsProcessing(false);
                 return;
             }
 
-            if (paymentIntent?.status === 'succeeded') {
-                // Notify GHL that payment succeeded
+            if (paymentIntent?.status === "succeeded") {
                 window.parent.postMessage({
-                    type: 'custom_element_success_response',
-                    chargeId: paymentIntent.id,
-                }, '*');
-            } else {
-                window.parent.postMessage({ type: 'custom_element_error_response', error: { description: 'Payment not successful.' } }, '*');
+                    type: "custom_element_success_response",
+                    chargeId: paymentIntent.id
+                }, "*");
             }
 
-        } catch (e: any) {
-            window.parent.postMessage({ type: 'custom_element_error_response', error: { description: e.message } }, '*');
+        } catch (err: any) {
+            window.parent.postMessage({
+                type: "custom_element_error_response",
+                error: { description: err.message }
+            }, "*");
         }
 
         setIsProcessing(false);
     };
 
     return (
-        <form id="payment-form" onSubmit={handleSubmit}>
-            <PaymentElement id="payment-element" />
-            <button disabled={isProcessing || !stripe || !elements} id="submit" style={{ marginTop: '10px' }}>
-                <span id="button-text">{isProcessing ? "Processing..." : "Pay now"}</span>
+        <form onSubmit={handleSubmit}>
+            <PaymentElement />
+            <button disabled={!stripe || !elements || isProcessing}>
+                {isProcessing ? "Processing..." : "Pay Now"}
             </button>
         </form>
     );
 };
 
-/* eslint-disable */
 export default function PaymentPage() {
     const [stripePromise, setStripePromise] = useState<any>(null);
     const [options, setOptions] = useState<StripeElementsOptions | null>(null);
-    const [isGhlReady, setIsGhlReady] = useState(false); // State to stop the interval
 
     useEffect(() => {
-        // --- 1. Set up the persistent "ready" message ---
-        const intervalId = setInterval(() => {
-            // Stop sending once GHL has responded
-            if (isGhlReady) {
-                clearInterval(intervalId);
-                return;
-            }
-
-            console.log("Sending 'custom_provider_ready' to parent...");
-            // --- UPDATED: Send to targetOrigin '*' ---
-            // This is more robust and ensures the parent window gets the message
+        // Continuously send ready message to GHL until props arrive
+        const readyInterval = setInterval(() => {
             window.parent.postMessage({
-                type: 'custom_provider_ready',
+                type: "custom_provider_ready",
                 loaded: true,
                 addCardOnFileSupported: true
-            }, '*'); // Use wildcard target origin
-        }, 300); // Send every 300ms
+            }, "*");
+        }, 300);
 
-        // --- 2. Set up the message listener ---
-        const handleGhlMessage = (event: MessageEvent) => {
-
-            // --- UPDATED: REMOVED the event.origin check ---
-            // We will listen for messages from ANY origin, but will
-            // only act on the ones with the correct 'type'.
-
-            // Safety check: Is the data an object with a 'type' property?
-            if (typeof event.data !== 'object' || event.data === null || !event.data.type) {
-                // This will safely ignore all the red "Unable to parse" errors
-                // and messages from Stripe, etc.
-                return;
+        function safeParse(data: any) {
+            try {
+                return typeof data === "string" ? JSON.parse(data) : data;
+            } catch {
+                return null;
             }
+        }
 
-            console.log("RECEIVED VALID MESSAGE:", event.data);
+        const onMessage = async (event: MessageEvent) => {
+            const parsed = safeParse(event.data);
+            if (!parsed || !parsed.type) return;
 
-            // --- 3. Handle the event ---
-            if (event.data.type === 'payment_initiate_props' || event.data.type === 'setup_initiate_props') {
+            console.log("GOT EVENT:", parsed);
 
-                // We got the event! Stop the interval.
-                setIsGhlReady(true);
-                clearInterval(intervalId);
+            if (parsed.type === "payment_initiate_props" || parsed.type === "setup_initiate_props") {
+                clearInterval(readyInterval);
 
                 const {
                     publishableKey,
@@ -118,53 +99,50 @@ export default function PaymentPage() {
                     contact,
                     locationId,
                     mode
-                } = event.data;
+                } = parsed;
 
-                const contactId = contact?.id;
-
-                if (!publishableKey || !contactId) {
-                    console.error("FATAL: Missing publishableKey or contactId from GHL.");
-                    window.parent.postMessage({ type: 'custom_element_error_response', error: { description: 'Configuration error: Key or Contact is missing.' } }, '*');
+                if (!publishableKey) {
+                    window.parent.postMessage({
+                        type: "custom_element_error_response",
+                        error: { description: "Stripe publishableKey missing." }
+                    }, "*");
                     return;
                 }
 
                 setStripePromise(loadStripe(publishableKey));
 
-                axios.post('/api/stripe/create-intent', {
-                    mode: mode,
-                    amount,
-                    currency,
-                    contactId,
-                    locationId
-                })
-                    .then(res => {
-                        const { clientSecret } = res.data;
-                        setOptions({
-                            clientSecret,
-                            appearance: { theme: 'stripe' }
-                        });
-                    })
-                    .catch(err => {
-                        console.error("Failed to create Payment Intent:", err);
-                        window.parent.postMessage({
-                            type: 'custom_element_error_response',
-                            error: 'Failed to initialize payment (server error).'
-                        }, '*');
+                try {
+                    const res = await axios.post("/api/stripe/create-intent", {
+                        mode,
+                        amount,
+                        currency,
+                        contactId: contact?.id,
+                        locationId
                     });
+
+                    setOptions({
+                        clientSecret: res.data.clientSecret,
+                        appearance: { theme: "stripe" }
+                    });
+
+                } catch (err) {
+                    window.parent.postMessage({
+                        type: "custom_element_error_response",
+                        error: { description: "Failed to create Stripe Intent." }
+                    }, "*");
+                }
             }
         };
 
-        window.addEventListener('message', handleGhlMessage);
+        window.addEventListener("message", onMessage);
 
-        // Cleanup function
         return () => {
-            window.removeEventListener('message', handleGhlMessage);
-            clearInterval(intervalId);
+            clearInterval(readyInterval);
+            window.removeEventListener("message", onMessage);
         };
-    }, [isGhlReady]); // Add isGhlReady as a dependency
+    }, []);
 
-    // Wait until both stripe and options are ready
-    if (!options || !stripePromise) return <Loader />;
+    if (!stripePromise || !options) return <Loader />;
 
     return (
         <Elements stripe={stripePromise} options={options}>

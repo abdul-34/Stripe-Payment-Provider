@@ -540,3 +540,74 @@ export async function getGhlContact(contactId: string, locationId: string): Prom
     throw new Error("Failed to fetch contact details from GHL.");
   }
 }
+
+export const CreateNewIntegration = async (ghl:{location_id: string,access_token:string}, body: any) => {
+  try {
+    const options = {
+      method: "POST",
+      maxBodyLength: Infinity,
+      url: `https://services.leadconnectorhq.com/payments/custom-provider/provider?locationId=${ghl?.location_id}`,
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${ghl.access_token}`,
+        "Content-Type": "application/json",
+        Version: "2021-04-15",
+      },
+      data: JSON.stringify(body),
+    };
+
+    const response = await axios.request(options);
+
+    return {
+      success: true,
+      status: response.status,
+      data: response.data,
+    };
+
+  } catch (error: any) {
+    console.error("CreateNewIntegration Error:", error?.response?.data || error);
+
+    return {
+      success: false,
+      status: error?.response?.status || 400,
+      data: error?.response?.data || error,
+    };
+  }
+};
+
+
+
+
+export const CreateNewProviderConfig = async (ghl: {location_id: string,access_token:string}, body: any) => {
+  try {
+    const options = {
+      method: "POST",
+      maxBodyLength: Infinity,
+      url: `https://services.leadconnectorhq.com/payments/custom-provider/connect?locationId=${ghl.location_id}`,
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${ghl.access_token}`,
+        "Content-Type": "application/json",
+        Version: "2021-04-15",
+      },
+      data: JSON.stringify(body),
+    };
+
+    const response = await axios.request(options);
+
+    return {
+      success: true,
+      status: response.status,
+      data: response.data,
+    };
+
+  } catch (error: any) {
+    console.error("CreateNewProviderConfig Error:", error?.response?.data || error);
+
+    return {
+      success: false,
+      status: error?.response?.status || 400,
+      data: error?.response?.data || error,
+    };
+  }
+};

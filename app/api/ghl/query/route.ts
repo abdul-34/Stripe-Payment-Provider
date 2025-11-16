@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { 
-  getOrCreateStripeCustomer,
-    getStripeSecretKey, 
+import {
+    getOrCreateStripeCustomer,
+    getStripeSecretKey,
     verifyGhlApiKey
-     // We'll need to create this simple helper
+    // We'll need to create this simple helper
 } from '@/lib/db/payment';
-import { prisma } from "@/lib/prisma"; // For direct DB access
 import Stripe from 'stripe';
 
 /* eslint-disable */
@@ -37,16 +36,16 @@ export async function POST(req: NextRequest) {
     }
 
     console.log(`Received GHL Query Event: ${type}`);
-    
+
     // --- NEW/UPDATED ---
     // This is the fully expanded switch based on the official docs
     switch (type) {
-        
+
         case 'verify': // --- UPDATED --- (from 'payment_verification')
             try {
                 const { chargeId } = data; // 'chargeId' is in the data object
                 const paymentIntent = await stripe.paymentIntents.retrieve(chargeId);
-                
+
                 if (paymentIntent.status === 'succeeded') {
                     return NextResponse.json({ success: true });
                 } else {
@@ -60,18 +59,18 @@ export async function POST(req: NextRequest) {
             try {
                 const refund = await stripe.refunds.create({
                     payment_intent: transactionId,
-                    amount: amount, 
+                    amount: amount,
                 });
                 // --- UPDATED --- (Return the snapshot as requested by docs)
                 return NextResponse.json({ success: true, refundSnapshot: refund });
             } catch (error: any) {
                 return NextResponse.json({ failed: true, message: error.message });
             }
-        
+
         case 'list_payment_methods': // --- NEW ---
             try {
                 const { contactId } = data;
-                const stripeCustomerId = await getOrCreateStripeCustomer(contactId,locationId,stripe);
+                const stripeCustomerId = await getOrCreateStripeCustomer(contactId, locationId, stripe);
                 if (!stripeCustomerId) {
                     return NextResponse.json([]); // Return empty array if no customer
                 }
@@ -89,9 +88,9 @@ export async function POST(req: NextRequest) {
                     subTitle: `Expires ${pm.card?.exp_month}/${pm.card?.exp_year.toString().slice(-2)}`,
                     expiry: `${pm.card?.exp_month}/${pm.card?.exp_year.toString().slice(-2)}`,
                     customerId: stripeCustomerId,
-                    imageUrl: `https://your-domain.com/logos/${pm.card?.brand}.png` // TODO: Host card logo images
+                    imageUrl: 'https://play-lh.googleusercontent.com/2PS6w7uBztfuMys5fgodNkTwTOE6bLVB2cJYbu5GHlARAK36FzO5bUfMDP9cEJk__cE'
                 }));
-                
+
                 return NextResponse.json(formattedMethods);
             } catch (error: any) {
                 return NextResponse.json({ failed: true, message: error.message });
@@ -100,7 +99,7 @@ export async function POST(req: NextRequest) {
         case 'charge_payment': // --- UPDATED ---
             try {
                 const { paymentMethodId, contactId, currency } = data;
-                const stripeCustomerId = await getOrCreateStripeCustomer(contactId,locationId,stripe);
+                const stripeCustomerId = await getOrCreateStripeCustomer(contactId, locationId, stripe);
 
                 const paymentIntent = await stripe.paymentIntents.create({
                     amount: amount,
@@ -110,7 +109,7 @@ export async function POST(req: NextRequest) {
                     off_session: true,
                     confirm: true,
                 });
-                
+
                 // --- UPDATED --- (Return the full snapshot GHL expects)
                 return NextResponse.json({
                     success: true,
@@ -124,7 +123,7 @@ export async function POST(req: NextRequest) {
                         chargedAt: paymentIntent.created // unix timestamp
                     }
                 });
-                
+
             } catch (error: any) {
                 return NextResponse.json({ failed: true, message: error.message });
             }
@@ -132,9 +131,9 @@ export async function POST(req: NextRequest) {
         case 'create_subscription': // --- NEW ---
             try {
                 const { contactId, paymentMethodId, subscriptionId, startDate, currency, productDetails } = data;
-                const stripeCustomerId = await getOrCreateStripeCustomer(contactId,locationId,stripe);
+                const stripeCustomerId = await getOrCreateStripeCustomer(contactId, locationId, stripe);
                 if (!stripeCustomerId) {
-                     return NextResponse.json({ failed: true, message: 'Stripe customer not found.' });
+                    return NextResponse.json({ failed: true, message: 'Stripe customer not found.' });
                 }
 
                 // 1. Set default payment method for the subscription
@@ -146,7 +145,7 @@ export async function POST(req: NextRequest) {
                 // TODO: You need robust logic to map GHL Products/Prices to Stripe Products/Prices
                 const ghlPrice = productDetails[0].prices[0];
                 const stripePriceId = "price_...YOUR_STRIPE_PRICE_ID"; // Placeholder!
-                
+
                 // 3. Calculate start date
                 const billingCycleAnchor = new Date(startDate).getTime() / 1000;
 
@@ -167,7 +166,7 @@ export async function POST(req: NextRequest) {
                     success: true,
                     message: "Subscription created",
                     // No transaction object, as it starts in the future
-                    transaction: null, 
+                    transaction: null,
                     subscription: {
                         subscriptionId: subscription.id,
                         subscriptionSnapshot: {
@@ -175,12 +174,12 @@ export async function POST(req: NextRequest) {
                             status: subscription.status, // 'scheduled', 'active', etc.
                             trialEnd: subscription.trial_end,
                             createdAt: subscription.created,
-                            nextCharge:  subscription?.trial_end|| ""   // NEED MODIFICATION
+                            nextCharge: subscription?.trial_end || ""   // NEED MODIFICATION
                         }
                     }
                 });
             } catch (error: any) {
-                 return NextResponse.json({ failed: true, message: error.message });
+                return NextResponse.json({ failed: true, message: error.message });
             }
 
         default:
